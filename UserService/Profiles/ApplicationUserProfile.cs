@@ -15,6 +15,7 @@ namespace UserService.Profiles
                 .ForMember(dest => dest.Username, opt => opt.MapFrom(src => src.Username))
                 .ForMember(dest => dest.Password, opt => opt.MapFrom(src => src.Password));
             CreateMap<ApplicationUserCreateDto, ApplicationUser>();
+            CreateMap<ApplicationUser, OutboxMessage>();
         }
     }
 }

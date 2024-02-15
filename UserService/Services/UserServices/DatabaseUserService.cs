@@ -7,6 +7,8 @@ using UserService.Dtos;
 using AutoMapper;
 using UserService.PasswordHashers;
 using Microsoft.AspNetCore.Http.HttpResults;
+using UserService.Repositories.OutboxRepositories;
+using System.Text.Json;
 
 namespace Services.UserServices
 {
@@ -14,12 +16,14 @@ namespace Services.UserServices
     {
         private readonly IPasswordHasher _passwordHasher;
         private readonly IUserRepository _userRepository;
+        private readonly IOutboxRepository _outboxRepository;
         private readonly IMapper _mapper;
 
-        public DatabaseUserService(IMapper mapper, IUserRepository userRepository, IPasswordHasher passwordHasher)
+        public DatabaseUserService(IMapper mapper, IUserRepository userRepository, IPasswordHasher passwordHasher, IOutboxRepository outboxRepository)
         {
             _mapper = mapper;
             _userRepository = userRepository;
+            _outboxRepository = outboxRepository;
             _passwordHasher = passwordHasher;
         }
 
@@ -35,7 +39,7 @@ namespace Services.UserServices
             return user ?? throw new UserNotFoundException($"User with username {username} not found.");
         }
 
-        public async Task<ApplicationUser> CreateUser(ApplicationUserCreateDto userCreateDto)
+        public async Task<ApplicationUser> CreateUserAndSaveOutboxMessage(ApplicationUserCreateDto userCreateDto)
         {
             ApplicationUser? existingUserWithUsername = await _userRepository.GetByUsername(userCreateDto.Username);
             ApplicationUser? existingUserWithEmail = await _userRepository.GetByEmail(userCreateDto.Email);
@@ -51,7 +55,18 @@ namespace Services.UserServices
             ApplicationUser user = _mapper.Map<ApplicationUser>(userCreateDto);
             user.UserId = Guid.NewGuid();
             user.PasswordHash = _passwordHasher.HashPassword(userCreateDto.Password);
-            return await _userRepository.Create(user);
+            ApplicationUser newlyCreatedUser = await _userRepository.Create(user);
+
+            OutboxMessage userCreatedOutboxMessage = new OutboxMessage(
+                JsonSerializer.Serialize(newlyCreatedUser),
+                "User_Created",
+                false,
+                DateTime.Now);
+
+            await _outboxRepository.Create(userCreatedOutboxMessage);
+
+            await _userRepository.UnitOfWork.SaveChangesAsync();
+            return newlyCreatedUser;
         }
 
         public async Task<ApplicationUser> GetUserById(Guid userId)
@@ -66,6 +81,7 @@ namespace Services.UserServices
             if (user is not null)
             {
                 await _userRepository.Delete(user);
+                await _userRepository.UnitOfWork.SaveChangesAsync();
             }
             else
             {
