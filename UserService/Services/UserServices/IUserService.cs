@@ -7,7 +7,7 @@ namespace Services.UserServices
     {
         Task<ApplicationUser> GetUserByEmail(string email);
         Task<ApplicationUser> GetUserByUsername(string username);
-        Task<ApplicationUser> CreateUser(ApplicationUserCreateDto user);
+        Task<ApplicationUser> CreateUserAndSaveOutboxMessage(ApplicationUserCreateDto user);
         Task<ApplicationUser> GetUserById(Guid userId);
         Task DeleteUserById(Guid userId);
     }

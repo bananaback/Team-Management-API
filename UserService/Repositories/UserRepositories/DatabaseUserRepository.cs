@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using UserService.Data;
 using UserService.Exceptions;
 using UserService.Models;
+using UserService.Repositories;
 
 namespace Repositories.UserRepositories
 {
@@ -12,17 +13,18 @@ namespace Repositories.UserRepositories
         {
             _context = userDbContext;
         }
+
+        public IUnitOfWork UnitOfWork => _context;
         public async Task<ApplicationUser> Create(ApplicationUser user)
         {
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+            await _context.Users.AddAsync(user);
             return user;
         }
 
         public async Task Delete(ApplicationUser user)
         {
             _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
+            await Task.CompletedTask;
         }
 
         public async Task<ApplicationUser?> GetByEmail(string email)

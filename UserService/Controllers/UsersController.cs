@@ -1,9 +1,11 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using Services.UserServices;
+using UserService.AsyncDataServices;
 using UserService.Dtos;
 using UserService.Exceptions;
 using UserService.Models;
+using UserService.Repositories;
 using UserService.Responses;
 
 namespace UserService.Controllers
@@ -14,10 +16,12 @@ namespace UserService.Controllers
     {
         private readonly IMapper _mapper;
         private readonly IUserService _userService;
-        public UsersController(IMapper mapper, IUserService userService)
+        private readonly IMessageBusClient _messageBusClient;
+        public UsersController(IMapper mapper, IUserService userService, IMessageBusClient messageBusClient)
         {
             _mapper = mapper;
             _userService = userService;
+            _messageBusClient = messageBusClient;
         }
 
         [HttpGet]
@@ -57,14 +61,20 @@ namespace UserService.Controllers
             ApplicationUserCreateDto userCreateDto = _mapper.Map<ApplicationUserCreateDto>(registerRequest);
             try
             {
-                ApplicationUser newlyCreatedUser = await _userService.CreateUser(userCreateDto);
+                ApplicationUser newlyCreatedUser = await _userService.CreateUserAndSaveOutboxMessage(userCreateDto);
                 ApplicationUserReadDto userReadDto = _mapper.Map<ApplicationUserReadDto>(newlyCreatedUser);
+
                 return CreatedAtRoute(nameof(GetUserById), new { userId = userReadDto.UserId }, userReadDto);
             }
             catch (UserAlreadyExistException ex)
             {
                 Console.WriteLine(ex.Message);
                 return Conflict(new ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Some errors occur why trying to register new user: {ex.Message}");
+                return BadRequest(new ErrorResponse($"Some errors occur why trying to register new user: {ex.Message}"));
             }
         }
 
