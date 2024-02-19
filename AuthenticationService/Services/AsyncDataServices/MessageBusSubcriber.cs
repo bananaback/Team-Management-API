@@ -41,7 +41,7 @@ public class MessageBusSubcriber : BackgroundService
 
     private void RabbitMQ_ConnectionShutdown(object? sender, ShutdownEventArgs e)
     {
-        throw new NotImplementedException();
+        Console.WriteLine("RabbitMQ connection shut down");
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)

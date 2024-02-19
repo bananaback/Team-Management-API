@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AuthenticationService.Dtos;
+using AuthenticationService.Services.UserServices;
 using AutoMapper;
 
 namespace AuthenticationService.Services.EventProcessingServices;
@@ -18,7 +19,22 @@ public class EventProcessor : IEventProcessor
         switch (eventType)
         {
             case EventType.User_Created:
-                // TO DO
+                PublishEventDto? publishEventDto = JsonSerializer.Deserialize<PublishEventDto>(message);
+                ApplicationUserCreateDto? user = JsonSerializer.Deserialize<ApplicationUserCreateDto>(publishEventDto!.EventData);
+                if (user is not null)
+                {
+                    // Map UserId from the JSON to ExternalUserId
+                    user.ExternalUserId = user.UserId;
+                    using (var scope = _serviceScopeFactory.CreateScope())
+                    {
+                        IUserService userService = scope.ServiceProvider.GetRequiredService<IUserService>();
+                        userService.CreateUser(user);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Could not deserialize user.");
+                }
                 break;
             default:
                 break;
