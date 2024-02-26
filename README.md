@@ -9,14 +9,13 @@
 
 ## 📊 Features:
 
-- Microservices Architecture
-
 - User Authentication & Authorization
 
 - Dynamic Task Assignment & Tracking
 
 - Real-time Progress Updates
-
+  
+... updating
 ---
 
 ## 🔗 Quick Start:
@@ -24,6 +23,7 @@
 ```bash
 git clone https://github.com/bananaback/Team-Management-API.git
 cd Team-Management-API
+...writing more
 ```
 
 ---
