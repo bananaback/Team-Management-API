@@ -35,10 +35,10 @@ cd Team-Management-API
 
 We welcome contributions! Please refer to our Contribution Guidelines for details on how to contribute to this project. (coming soon)
 
-📬 Contact Us:
+📬 Contact me:
 
-Have questions or suggestions? Feel free to open an issue or reach out to us on votrongtin882003@example.com.
+Have questions or suggestions? Feel free to open an issue or reach out to us on ...
 
-🌐 Visit our website: bananaback.dev
+🌐 Visit our website: bananaback.dev (it does not exist)
 
 Let's build effective teams and enhance collaboration together! 🚀
