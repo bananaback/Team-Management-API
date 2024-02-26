@@ -13,7 +13,7 @@ public class EventProcessor : IEventProcessor
     {
         _serviceScopeFactory = serviceScopeFactory;
     }
-    public void ProcessEvent(string message)
+    public async Task ProcessEventAsync(string message)
     {
         EventType eventType = DetermineEvent(message);
         switch (eventType)
@@ -28,7 +28,7 @@ public class EventProcessor : IEventProcessor
                     using (var scope = _serviceScopeFactory.CreateScope())
                     {
                         IUserService userService = scope.ServiceProvider.GetRequiredService<IUserService>();
-                        userService.CreateUser(user);
+                        await userService.CreateUser(user);
                     }
                 }
                 else

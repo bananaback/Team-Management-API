@@ -12,6 +12,7 @@ using AuthenticationService.Services.TokenGenerators;
 using AuthenticationService.Services.TokenValidators;
 using AuthenticationService.Services.UserServices;
 using Azure.Core;
+using Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -19,7 +20,6 @@ using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Configuration.AddJsonFile("appsettings.Development.json");
 AuthenticationConfiguration authenticationConfiguration = new AuthenticationConfiguration();
 builder.Configuration.GetSection("Authentication").Bind(authenticationConfiguration);
 
@@ -34,6 +34,7 @@ services.AddSingleton<TokenGenerator>();
 services.AddSingleton<IConnectionMultiplexer>(provider =>
 {
     var connectionString = builder.Configuration.GetConnectionString("redis");
+    Console.WriteLine("Redis connection string: " + connectionString);
     return ConnectionMultiplexer.Connect(connectionString!);
 });
 services.AddScoped<Authenticator>();
@@ -42,10 +43,37 @@ services.AddScoped<RedisTokenCache>();
 services.AddScoped<IUserService, UserService>();
 services.AddScoped<IUserRepository, UserRepository>();
 services.AddScoped<Authenticator>();
-services.AddDbContext<AuthenticationDbContext>(options =>
+
+if (builder.Environment.IsDevelopment())
 {
-    options.UseInMemoryDatabase("AuthInMem");
-});
+    /*
+    Console.WriteLine("--> Using InMem memory");
+    
+        services.AddDbContext<AuthenticationDbContext>(options =>
+        {
+            options.UseInMemoryDatabase("AuthInMem");
+        });
+        */
+    Console.WriteLine("--> Using SqlServer Db: " + builder.Configuration.GetConnectionString("AuthConn"));
+    services.AddDbContext<AuthenticationDbContext>(options =>
+    {
+        options.UseSqlServer(builder.Configuration.GetConnectionString("AuthConn"));
+    });
+
+}
+else if (builder.Environment.IsProduction())
+{
+    var connectionString = builder.Configuration.GetConnectionString("AuthConn");
+    Console.WriteLine("--> Using SqlServer Db: " + connectionString);
+    services.AddDbContext<AuthenticationDbContext>(options =>
+    {
+        options.UseSqlServer(connectionString);
+    });
+}
+
+
+
+
 services.AddSingleton<IEventProcessor, EventProcessor>();
 services.AddHostedService<MessageBusSubcriber>();
 
@@ -84,5 +112,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+PrepDb.PrepPopulation(app, builder.Environment.IsProduction());
 
 app.Run();
