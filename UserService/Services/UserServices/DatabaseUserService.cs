@@ -9,6 +9,7 @@ using UserService.PasswordHashers;
 using Microsoft.AspNetCore.Http.HttpResults;
 using UserService.Repositories.OutboxRepositories;
 using System.Text.Json;
+using UserService.Enums;
 
 namespace Services.UserServices
 {
@@ -55,6 +56,7 @@ namespace Services.UserServices
             ApplicationUser user = _mapper.Map<ApplicationUser>(userCreateDto);
             user.UserId = Guid.NewGuid();
             user.PasswordHash = _passwordHasher.HashPassword(userCreateDto.Password);
+            user.UserRole = UserRoleEnum.BASIC_USER;
             ApplicationUser newlyCreatedUser = await _userRepository.Create(user);
 
             OutboxMessage userCreatedOutboxMessage = new OutboxMessage(

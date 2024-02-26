@@ -18,3 +18,13 @@ spec:
                 name: users-clusterip-srv
                 port:
                   number: 8080
+    - host: auth.bananaback.dev
+      http:
+        paths:
+          - path: /(\w+)/(\w+)(.*)
+            pathType: Exact
+            backend:
+              service:
+                name: authenticationservice-clusterip-srv
+                port:
+                  number: 8080

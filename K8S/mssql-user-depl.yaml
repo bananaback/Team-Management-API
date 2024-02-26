@@ -1,16 +1,27 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mssql-user-claim
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Mi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mssql-depl
+  name: mssql-user-depl
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: mssql
+      app: mssql-user
   template:
     metadata:
       labels:
-        app: mssql
+        app: mssql-user
     spec:
       containers:
         - name: mssql
@@ -25,39 +36,26 @@ spec:
             - name: SA_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: mssql
+                  name: mssql-user-secret
                   key: SA_PASSWORD
           volumeMounts:
             - mountPath: /var/opt/mssql/data
-              name: mssqldb
+              name: mssqluserdb
       volumes:
-        - name: mssqldb
+        - name: mssqluserdb
           persistentVolumeClaim:
-            claimName: mssql-claim
+            claimName: mssql-user-claim
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: mssql-clusterip-srv
+  name: mssql-user-clusterip-srv
 spec:
   type: ClusterIP
   selector:
-    app: mssql
+    app: mssql-user
   ports:
     - name: mssql
       protocol: TCP
-      port: 1433
-      targetPort: 1433
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mssql-loadbalancer
-spec:
-  type: LoadBalancer
-  selector:
-    app: mssql
-  ports:
-    - protocol: TCP
       port: 1433
       targetPort: 1433

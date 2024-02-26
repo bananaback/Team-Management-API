@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mssql-auth-claim
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mssql-auth-depl
+spec:
+  selector:
+    matchLabels:
+      app: mssql-auth
+  template:
+    metadata:
+      labels:
+        app: mssql-auth
+    spec:
+      containers:
+        - name: mssql
+          image: mcr.microsoft.com/mssql/server:2022-latest
+          ports:
+            - containerPort: 1433
+          env:
+            - name: MSSQL_PID
+              value: "Express"
+            - name: ACCEPT_EULA
+              value: "Y"
+            - name: SA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mssql-auth-secret
+                  key: SA_PASSWORD
+          volumeMounts:
+            - mountPath: /var/opt/mssql/data
+              name: mssqlauthdb
+      volumes:
+        - name: mssqlauthdb
+          persistentVolumeClaim:
+            claimName: mssql-auth-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mssql-auth-clusterip-srv
+spec:
+  type: ClusterIP
+  selector:
+    app: mssql-auth
+  ports:
+    - name: mssql
+      protocol: TCP
+      port: 1433
+      targetPort: 1433

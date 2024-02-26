@@ -5,5 +5,5 @@ namespace UserService.AsyncDataServices;
 
 public interface IMessageBusClient
 {
-    void Publish(OutboxMessage messageo);
+    void Publish(PublishEventDto messageo);
 }
