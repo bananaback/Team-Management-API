@@ -8,7 +8,6 @@ using UserService.Data;
 using UserService.OutboxMessageServices;
 using UserService.PasswordHashers;
 using UserService.Profiles;
-using UserService.Repositories;
 using UserService.Repositories.OutboxRepositories;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,6 +34,10 @@ if (builder.Environment.IsDevelopment())
 {
     Console.WriteLine("--> Using ImMem Db");
     services.AddDbContext<UserDbContext>(options => options.UseInMemoryDatabase("InMem"));
+    //services.AddDbContext<UserDbContext>(options =>
+    //{
+    //    options.UseSqlServer(builder.Configuration.GetConnectionString("UserConn"));
+    //});
 }
 else if (builder.Environment.IsProduction())
 {

@@ -1,3 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rabbitmq-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi # You can adjust the storage size as needed
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,6 +31,13 @@ spec:
               name: rbmq-mgmt-port
             - containerPort: 5672
               name: rbmq-msg-port
+          volumeMounts:
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq # Adjust the path based on RabbitMQ image documentation
+      volumes:
+        - name: rabbitmq-data
+          persistentVolumeClaim:
+            claimName: rabbitmq-pvc
 ---
 apiVersion: v1
 kind: Service

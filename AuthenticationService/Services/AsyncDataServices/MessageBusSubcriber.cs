@@ -23,6 +23,9 @@ public class MessageBusSubcriber : BackgroundService
 
     private void InitializeRabbitMQ()
     {
+        Console.WriteLine(_configuration["RabbitMQHost"]);
+        Console.WriteLine(_configuration["RabbitMQPort"]);
+
         var factory = new ConnectionFactory()
         {
             HostName = _configuration["RabbitMQHost"],
@@ -31,8 +34,8 @@ public class MessageBusSubcriber : BackgroundService
 
         _connection = factory.CreateConnection();
         _channel = _connection.CreateModel();
-        _channel.ExchangeDeclare(exchange: "trigger", type: ExchangeType.Fanout);
-        _queueName = _channel.QueueDeclare().QueueName;
+        _channel.ExchangeDeclare(exchange: "trigger", type: ExchangeType.Fanout, durable: true);
+        _queueName = _channel.QueueDeclare(queue: "auth_service_subcriber_queue", durable: true, exclusive: false, autoDelete: false, arguments: null).QueueName;
         _channel.QueueBind(queue: _queueName, exchange: "trigger", routingKey: "");
         Console.WriteLine("--> Listening on the message bus...");
 
@@ -58,7 +61,7 @@ public class MessageBusSubcriber : BackgroundService
                 var notificationMessage = Encoding.UTF8.GetString(body.ToArray());
 
                 // Processing the received event using the provided event processor
-                _eventProcessor.ProcessEvent(notificationMessage);
+                _eventProcessor.ProcessEventAsync(notificationMessage);
 
                 // Manually acknowledging the message
                 _channel?.BasicAck(ea.DeliveryTag, multiple: false);

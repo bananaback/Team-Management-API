@@ -25,7 +25,19 @@ public class MessageBusClient : IMessageBusClient
             _connection = factory.CreateConnection();
             _channel = _connection.CreateModel();
 
-            _channel.ExchangeDeclare(exchange: "trigger", type: ExchangeType.Fanout);
+            _channel.ExchangeDeclare(exchange: "trigger", type: ExchangeType.Fanout, durable: true);
+
+            _channel.QueueDeclare(
+            queue: "auth_service_subcriber_queue",
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            arguments: null);
+
+            _channel.QueueBind(
+            queue: "auth_service_subcriber_queue",
+            exchange: "trigger",
+            routingKey: "");
 
             _connection.ConnectionShutdown += RabbitMQ_ConnectionShutdown;
 
@@ -43,7 +55,7 @@ public class MessageBusClient : IMessageBusClient
         Console.WriteLine("--> RabbitMQ connection shutdown.");
     }
 
-    public void Publish(OutboxMessage message)
+    public void Publish(PublishEventDto message)
     {
         var serializedMessage = JsonSerializer.Serialize(message);
 
@@ -61,10 +73,12 @@ public class MessageBusClient : IMessageBusClient
     private void SendMessage(string message)
     {
         var body = Encoding.UTF8.GetBytes(message);
+        var properties = _channel.CreateBasicProperties();
+        properties.Persistent = true;
         _channel.BasicPublish(
             exchange: "trigger",
             routingKey: "",
-            basicProperties: null,
+            basicProperties: properties,
             body: body);
         Console.WriteLine($"--> We have sent {message}");
     }

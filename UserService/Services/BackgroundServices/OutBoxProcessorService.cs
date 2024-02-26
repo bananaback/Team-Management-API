@@ -1,6 +1,8 @@
 
+using AutoMapper;
 using Services.OutboxMessageServices;
 using UserService.AsyncDataServices;
+using UserService.Dtos;
 using UserService.Models;
 using UserService.Repositories;
 
@@ -11,12 +13,14 @@ public class OutboxProcessorService : BackgroundService
     private readonly ILogger<OutboxProcessorService> _logger;
     private readonly IMessageBusClient _messageBusClient;
     private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly IMapper _mapper;
 
-    public OutboxProcessorService(ILogger<OutboxProcessorService> logger, IMessageBusClient messageBusClient, IServiceScopeFactory serviceScopeFactory)
+    public OutboxProcessorService(ILogger<OutboxProcessorService> logger, IMessageBusClient messageBusClient, IServiceScopeFactory serviceScopeFactory, IMapper mapper)
     {
         _logger = logger;
         _messageBusClient = messageBusClient;
         _serviceScopeFactory = serviceScopeFactory;
+        _mapper = mapper;
     }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -36,7 +40,8 @@ public class OutboxProcessorService : BackgroundService
                     // Send async message
                     try
                     {
-                        _messageBusClient.Publish(message);
+                        PublishEventDto publishEvent = _mapper.Map<PublishEventDto>(message);
+                        _messageBusClient.Publish(publishEvent);
                         message.IsSent = true;
                         await outboxMessageService.UpdateOutboxMessage(message);
                     }
