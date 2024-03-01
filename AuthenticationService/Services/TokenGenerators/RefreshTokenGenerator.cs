@@ -18,7 +18,7 @@ public class RefreshTokenGenerator
     {
         List<Claim> claims = new List<Claim>()
         {
-            new Claim("id", user.ExternalUserId.ToString())
+            new Claim("id", user.UserId.ToString())
         };
         return _tokenGenerator.GenerateToken(
                 _authenticationConfiguration.RefreshTokenSecret,

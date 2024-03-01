@@ -64,7 +64,7 @@ public class AuthenticationController : Controller
         string? refreshToken = Request.Cookies["refreshToken"];
         if (refreshToken is null)
         {
-            return BadRequest(new ErrorResponse("Access token not found."));
+            return BadRequest(new ErrorResponse("Refresh token not found."));
         }
 
         await _authenticator.LogUserOut(refreshToken);
@@ -78,7 +78,7 @@ public class AuthenticationController : Controller
         string? refreshToken = Request.Cookies["refreshToken"];
         if (refreshToken is null)
         {
-            return BadRequest(new ErrorResponse("Access token not found."));
+            return BadRequest(new ErrorResponse("Refresh token not found."));
         }
 
         // Get user ID from the ClaimsPrincipal

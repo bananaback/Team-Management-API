@@ -31,9 +31,9 @@ public class UserRepository : IUserRepository
         return await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == email);
     }
 
-    public async Task<ApplicationUser?> GetByExternalId(Guid externalId)
+    public async Task<ApplicationUser?> GetById(Guid id)
     {
-        return await _dbContext.Users.FirstOrDefaultAsync(u => u.ExternalUserId == externalId);
+        return await _dbContext.Users.FirstOrDefaultAsync(u => u.UserId == id);
     }
 
     public async Task<ApplicationUser?> GetByUsername(string username)
