@@ -8,7 +8,7 @@ public class ApplicationUserProfile : Profile
 {
     public ApplicationUserProfile()
     {
-        CreateMap<ApplicationUserCreateDto, ApplicationUser>()
-            .ForMember(dest => dest.ExternalUserId, options => options.MapFrom(src => src.ExternalUserId));
+        CreateMap<ApplicationUserCreateDto, ApplicationUser>();
+        // .ForMember(dest => dest.ExternalUserId, options => options.MapFrom(src => src.ExternalUserId));
     }
 }

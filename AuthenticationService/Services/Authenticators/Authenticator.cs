@@ -48,7 +48,7 @@ public class Authenticator
                     AccessToken = _accessTokenGenerator.GenerateToken(user),
                     RefreshToken = _refreshTokenGenerator.GenerateToken(user)
                 };
-                _redisTokenCache.TrackUserRefreshToken(user.ExternalUserId, authenticatedUserResponse.RefreshToken);
+                _redisTokenCache.TrackUserRefreshToken(user.UserId, authenticatedUserResponse.RefreshToken);
             }
         }
 
@@ -77,7 +77,7 @@ public class Authenticator
         {
             RefreshTokenClaims refreshTokenClaims = _refreshTokenValidator.ExtractTokenClaims(refreshToken);
 
-            ApplicationUser? user = await _userRepository.GetByExternalId(Guid.Parse(refreshTokenClaims.UserId));
+            ApplicationUser? user = await _userRepository.GetById(Guid.Parse(refreshTokenClaims.UserId));
             if (user is not null)
             {
                 authenticatedUserResponse = new AuthenticatedUserResponse()
@@ -85,7 +85,7 @@ public class Authenticator
                     AccessToken = _accessTokenGenerator.GenerateToken(user),
                     RefreshToken = _refreshTokenGenerator.GenerateToken(user)
                 };
-                _redisTokenCache.TrackUserRefreshToken(user.ExternalUserId, authenticatedUserResponse.RefreshToken);
+                _redisTokenCache.TrackUserRefreshToken(user.UserId, authenticatedUserResponse.RefreshToken);
             }
 
         }

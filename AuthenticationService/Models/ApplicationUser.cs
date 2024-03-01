@@ -7,7 +7,6 @@ public class ApplicationUser
 {
     [Key]
     public Guid UserId { get; set; }
-    public Guid ExternalUserId { get; set; }
     public string Username { get; set; }
     public string PasswordHash { get; set; }
     public string Email { get; set; }
@@ -20,9 +19,9 @@ public class ApplicationUser
         Email = string.Empty;
     }
 
-    public ApplicationUser(Guid externalUserId, string username, string passwordHash, string email, UserRoleEnum userRole)
+    public ApplicationUser(Guid userId, string username, string passwordHash, string email, UserRoleEnum userRole)
     {
-        ExternalUserId = externalUserId;
+        UserId = userId;
         Username = username;
         PasswordHash = passwordHash;
         Email = email;
