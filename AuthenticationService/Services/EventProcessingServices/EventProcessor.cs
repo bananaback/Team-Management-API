@@ -23,8 +23,6 @@ public class EventProcessor : IEventProcessor
                 ApplicationUserCreateDto? user = JsonSerializer.Deserialize<ApplicationUserCreateDto>(publishEventDto!.EventData);
                 if (user is not null)
                 {
-                    // Map UserId from the JSON to ExternalUserId
-                    user.ExternalUserId = user.UserId;
                     using (var scope = _serviceScopeFactory.CreateScope())
                     {
                         IUserService userService = scope.ServiceProvider.GetRequiredService<IUserService>();
