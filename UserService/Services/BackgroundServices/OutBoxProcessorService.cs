@@ -41,9 +41,11 @@ public class OutboxProcessorService : BackgroundService
                     try
                     {
                         PublishEventDto publishEvent = _mapper.Map<PublishEventDto>(message);
-                        _messageBusClient.Publish(publishEvent);
-                        message.IsSent = true;
-                        await outboxMessageService.UpdateOutboxMessage(message);
+                        if (_messageBusClient.Publish(publishEvent))
+                        {
+                            message.IsSent = true;
+                            await outboxMessageService.UpdateOutboxMessage(message);
+                        }
                     }
                     catch (Exception ex)
                     {
