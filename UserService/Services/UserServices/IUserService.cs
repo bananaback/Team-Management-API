@@ -9,6 +9,6 @@ namespace Services.UserServices
         Task<ApplicationUser> GetUserByUsername(string username);
         Task<ApplicationUser> CreateUserAndSaveOutboxMessage(ApplicationUserCreateDto user);
         Task<ApplicationUser> GetUserById(Guid userId);
-        Task DeleteUserById(Guid userId);
+        Task DeleteUserByIdAndSaveOutboxMessage(Guid userId);
     }
 }

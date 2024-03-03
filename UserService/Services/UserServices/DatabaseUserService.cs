@@ -77,12 +77,19 @@ namespace Services.UserServices
             return user ?? throw new UserNotFoundException($"User with id {userId} not found.");
         }
 
-        public async Task DeleteUserById(Guid userId)
+        public async Task DeleteUserByIdAndSaveOutboxMessage(Guid userId)
         {
             ApplicationUser? user = await _userRepository.GetById(userId);
             if (user is not null)
             {
                 await _userRepository.Delete(user);
+                OutboxMessage userDeletedOutboxMessage = new OutboxMessage(
+                    userId.ToString(),
+                    "User_Deleted",
+                    false,
+                    DateTime.Now
+                );
+                await _outboxRepository.Create(userDeletedOutboxMessage);
                 await _userRepository.UnitOfWork.SaveChangesAsync();
             }
             else

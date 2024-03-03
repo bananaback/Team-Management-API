@@ -83,7 +83,7 @@ namespace UserService.Controllers
         {
             try
             {
-                await _userService.DeleteUserById(userId);
+                await _userService.DeleteUserByIdAndSaveOutboxMessage(userId);
                 return NoContent();
             }
             catch (UserNotFoundException ex)

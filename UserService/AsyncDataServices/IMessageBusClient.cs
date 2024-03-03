@@ -3,7 +3,7 @@ using UserService.Models;
 
 namespace UserService.AsyncDataServices;
 
-public interface IMessageBusClient
+public interface IMessageBusClient : IDisposable
 {
-    void Publish(PublishEventDto messageo);
+    bool Publish(PublishEventDto messageo);
 }
