@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using AuthenticationService.Exceptions;
 using AuthenticationService.Models.Requests;
 using AuthenticationService.Models.Response;
 using AuthenticationService.Services.Authenticators;
@@ -46,14 +47,21 @@ public class AuthenticationController : Controller
                 "At least one special character"
             }));
         }
-        AuthenticatedUserResponse? authenticatedUserResponse = await _authenticator.Authenticate(loginRequest);
-        if (authenticatedUserResponse is null)
+        try
         {
-            return BadRequest(new ErrorResponse("Invalid credentials"));
-        }
-        else
-        {
+            AuthenticatedUserResponse authenticatedUserResponse = await _authenticator.Authenticate(loginRequest);
             return Ok(authenticatedUserResponse);
+        }
+        catch (AuthenticationFailedException ex)
+        {
+            if (ex.IsUserFault)
+            {
+                return BadRequest(new ErrorResponse("Invalid credentials"));
+            }
+            else
+            {
+                return BadRequest(new ErrorResponse("Could not login due to our server. Please try again."));
+            }
         }
     }
 
@@ -67,7 +75,14 @@ public class AuthenticationController : Controller
             return BadRequest(new ErrorResponse("Refresh token not found."));
         }
 
-        await _authenticator.LogUserOut(refreshToken);
+        try
+        {
+            await _authenticator.LogUserOut(refreshToken);
+        }
+        catch (AuthenticationFailedException)
+        {
+            return BadRequest("Could not completely log out. Please try again.");
+        }
         return Ok("User logout successfully.");
     }
 
@@ -89,7 +104,14 @@ public class AuthenticationController : Controller
             return BadRequest(new ErrorResponse("User ID not found."));
         }
 
-        await _authenticator.LogUserOutOnAllDevices(userId);
+        try
+        {
+            await _authenticator.LogUserOutOnAllDevices(userId);
+        }
+        catch (AuthenticationFailedException)
+        {
+            return BadRequest("Could not completely log out on all devices. Please try again.");
+        }
         return Ok("User logout on all devices successfully.");
 
     }
@@ -102,14 +124,21 @@ public class AuthenticationController : Controller
         {
             return BadRequest(new ErrorResponse("Refresh token not found."));
         }
-        AuthenticatedUserResponse? authenticatedUserResponse = await _authenticator.RotateToken(refreshToken);
-        if (authenticatedUserResponse is null)
+        try
         {
-            return BadRequest(new ErrorResponse("Invalid refreshToken"));
-        }
-        else
-        {
+            AuthenticatedUserResponse authenticatedUserResponse = await _authenticator.RotateToken(refreshToken);
             return Ok(authenticatedUserResponse);
+        }
+        catch (AuthenticationFailedException ex)
+        {
+            if (ex.IsUserFault)
+            {
+                return BadRequest(new ErrorResponse("Invalid refresh token"));
+            }
+            else
+            {
+                return BadRequest(new ErrorResponse("Could not refresh the token because of server issue. Please try again."));
+            }
         }
     }
 
