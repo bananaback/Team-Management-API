@@ -8,5 +8,5 @@ public interface IUserService
     Task<ApplicationUser> CreateUser(ApplicationUserCreateDto applicationUserCreateDto);
     Task<ApplicationUser?> GetUserByUsername(string username);
     Task<ApplicationUser?> GetUserByEmail(string email);
-    Task DeleteUserById(Guid userId);
+    Task DeleteUserByIdAndRevokeAllToken(Guid userId);
 }

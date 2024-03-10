@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AuthenticationService.Dtos;
+using AuthenticationService.Exceptions;
 using AuthenticationService.Services.UserServices;
 using AutoMapper;
 
@@ -34,6 +35,22 @@ public class EventProcessor : IEventProcessor
                     Console.WriteLine("Could not deserialize user.");
                 }
                 break;
+            case EventType.User_Deleted:
+                PublishEventDto? userDeletePublishEventDto = JsonSerializer.Deserialize<PublishEventDto>(message);
+                using (var scope = _serviceScopeFactory.CreateScope())
+                {
+                    IUserService userService = scope.ServiceProvider.GetRequiredService<IUserService>();
+                    Guid userId = new Guid(userDeletePublishEventDto!.EventData);
+                    try
+                    {
+                        await userService.DeleteUserByIdAndRevokeAllToken(userId);
+                    }
+                    catch (UserNotFoundException ex)
+                    {
+                        Console.WriteLine($"{ex.Message} --> Saved message to process later.");
+                    }
+                }
+                break;
             default:
                 break;
         }
@@ -51,6 +68,10 @@ public class EventProcessor : IEventProcessor
                     Console.WriteLine("--> User created event detected");
                     Console.WriteLine(publishEventDto.EventData);
                     return EventType.User_Created;
+                case "User_Deleted":
+                    Console.WriteLine("--> User deleted event detected");
+                    Console.WriteLine(publishEventDto.EventData);
+                    return EventType.User_Deleted;
                 default:
                     Console.WriteLine("--> Could not determine event type");
                     return EventType.Undetermined;

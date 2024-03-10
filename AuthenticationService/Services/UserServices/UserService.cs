@@ -2,6 +2,7 @@ using AuthenticationService.Dtos;
 using AuthenticationService.Exceptions;
 using AuthenticationService.Models;
 using AuthenticationService.Repositories.UserRepositories;
+using AuthenticationService.Services.CacheServices;
 using AutoMapper;
 
 namespace AuthenticationService.Services.UserServices;
@@ -9,10 +10,12 @@ namespace AuthenticationService.Services.UserServices;
 public class UserService : IUserService
 {
     private readonly IUserRepository _userRepository;
+    private readonly RedisTokenCache _redisTokenCache;
     private readonly IMapper _mapper;
-    public UserService(IUserRepository userRepository, IMapper mapper)
+    public UserService(IUserRepository userRepository, IMapper mapper, RedisTokenCache redisTokenCache)
     {
         _userRepository = userRepository;
+        _redisTokenCache = redisTokenCache;
         _mapper = mapper;
     }
 
@@ -37,9 +40,16 @@ public class UserService : IUserService
         return newlyCreatedUser;
     }
 
-    public Task DeleteUserById(Guid userId)
+    public async Task DeleteUserByIdAndRevokeAllToken(Guid userId)
     {
-        throw new NotImplementedException();
+        ApplicationUser? user = await _userRepository.GetById(userId);
+        if (user == null)
+        {
+            throw new UserNotFoundException($"User with id {userId} not found.");
+        }
+        await _userRepository.DeleteUser(user);
+        await _redisTokenCache.RevokeAllRefreshTokensOfUser(userId.ToString());
+        await _userRepository.UnitOfWork.SaveChangesAsync();
     }
 
     public Task<ApplicationUser?> GetUserByEmail(string email)
