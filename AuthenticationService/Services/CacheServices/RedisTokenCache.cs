@@ -12,14 +12,14 @@ using StackExchange.Redis;
 
 namespace AuthenticationService.Services.CacheServices;
 
-public class RedisTokenCache
+public class RedisTokenCache : ITokenCache
 {
     private readonly AuthenticationConfiguration _authenticationConfiguration;
-    private readonly RefreshTokenValidator _refreshTokenValidator;
+    private readonly ITokenValidator _refreshTokenValidator;
     private readonly Task<RedisConnection> _redisConnectionFactory;
     private readonly ILogger<RedisTokenCache> _logger;
     private RedisConnection? _redisConnection;
-    public RedisTokenCache(ILogger<RedisTokenCache> logger, Task<RedisConnection> redisConnectionFactory, AuthenticationConfiguration authenticationConfiguration, RefreshTokenValidator refreshTokenValidator)
+    public RedisTokenCache(ILogger<RedisTokenCache> logger, Task<RedisConnection> redisConnectionFactory, AuthenticationConfiguration authenticationConfiguration, ITokenValidator refreshTokenValidator)
     {
         _authenticationConfiguration = authenticationConfiguration;
         _refreshTokenValidator = refreshTokenValidator;
@@ -37,16 +37,20 @@ public class RedisTokenCache
     {
         if (_redisConnection == null)
         {
-            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(15));
+            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(10));
             var connectTask = _redisConnectionFactory;
             var combinedTask = await Task.WhenAny(timeoutTask, connectTask);
             if (combinedTask == timeoutTask)
             {
                 throw new TimeoutException("Redis connection initialization timed out.");
             }
-            _redisConnection = await connectTask;
+            else
+            {
+                _redisConnection = await connectTask;
+            }
         }
     }
+
 
     /// <summary>
     /// Checks if a refresh token is revoked in Redis.
@@ -59,30 +63,31 @@ public class RedisTokenCache
         try
         {
             await EnsureRedisConnectionInitializedAsync();
-            return await _redisConnection!.ExecuteWithBackgroundReconnectAsync(async (db) => await db.KeyExistsAsync(refreshToken));
+            bool isRefreshTokenRevoked = await _redisConnection!.ExecuteWithBackgroundReconnectAsync(async (db) => await db.KeyExistsAsync(refreshToken));
+            return isRefreshTokenRevoked;
         }
-        catch (TimeoutException ex)
+        catch (TimeoutException timeoutEx)
         {
-            _logger.LogError(ex, $"Check revocation failed for refresh token : {refreshToken}."
-                + "An timeout exception occurs while ensure redis connection initialized: " + ex.Message);
-
-            throw new TokenCacheException($"Failed to check if token is revoked: {ex.Message}");
+            _logger.LogError(timeoutEx, $"Check revocation failed for refresh token : {refreshToken}."
+                        + "A timeout exception occurs while ensure redis connection initialized: " + timeoutEx.Message);
+            throw new TokenCacheException("Failed to check refresh token revocation");
         }
         catch (Exception ex) when (ex is RedisConnectionException || ex is SocketException || ex is ObjectDisposedException)
         {
             _logger.LogError(ex, $"Check revocation failed for refresh token : {refreshToken}."
-                + "An redis-related exception occurs while execute operation: " + ex.Message);
-
-            throw new TokenCacheException($"Failed to check if token is revoked: {ex.Message}");
+                        + "A redis-related exception occurs while execute operation: " + ex.Message);
+            throw new TokenCacheException("Failed to check refresh token revocation");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, $"Check revocation failed for refresh token : {refreshToken}."
-                + "An unexpected exception occurs while checking token revocation: " + ex.Message);
-
-            throw new TokenCacheException($"Failed to check if token is revoked: {ex.Message}");
+                            + "An unexpected exception occurs while checking token revocation: " + ex.Message);
+            throw new TokenCacheException("Failed to check refresh token revocation");
         }
     }
+
+
+
 
     /// <summary>
     /// Revoke a refresh token by adding it to token blacklist in Redis.
@@ -105,9 +110,9 @@ public class RedisTokenCache
 
             _logger.LogInformation($"Refresh token '{refreshToken}' has been revoked in Redis.");
         }
-        catch (RequiredTokenClaimNotFoundException ex)
+        catch (TokenExtractionException ex)
         {
-            _logger.LogWarning(ex, $"Token revocation failed. Token is not valid for caching. Required token claims not found for token: {refreshToken}" + ex.Message);
+            _logger.LogWarning(ex, $"Token revocation failed. Token is not valid for caching: {refreshToken}" + ex.Message);
 
             throw new TokenCacheException("Token not valid for caching" + ex.Message);
         }
@@ -154,7 +159,7 @@ public class RedisTokenCache
         catch (TimeoutException ex)
         {
             _logger.LogError(ex, $"Failed to revoke all token of user {userId}. "
-                + "An timeout exception occurs while ensure redis connection initialized: " + ex.Message);
+                + ex.Message);
 
             throw new TokenCacheException("Failed to revoke refresh token: " + ex.Message);
         }
@@ -187,31 +192,32 @@ public class RedisTokenCache
     /// </summary>
     /// <param name="userId"></param>
     /// <param name="refreshToken"></param>
+    /// <returns></returns>
     /// <exception cref="TokenCacheException"></exception>
-    public async void TrackUserRefreshToken(Guid userId, string refreshToken)
+    public async Task TrackUserRefreshToken(Guid userId, string refreshToken)
     {
         try
         {
             await EnsureRedisConnectionInitializedAsync();
             await _redisConnection!.ExecuteWithBackgroundReconnectAsync(async (db) => await db.SetAddAsync(userId.ToString(), refreshToken));
         }
-        catch (TimeoutException ex)
+        catch (TimeoutException timeoutEx)
         {
-            _logger.LogError(ex, $"Failed to track refresh token: {refreshToken} of user with id: {userId}. "
-                + "An timeout exception occurs while ensure redis connection initialized: " + ex.Message);
+            _logger.LogError($"An timeout exception occurs while ensure redis connection initialized: {timeoutEx.Message}");
+            throw new TokenCacheException("Failed to track refresh token: " + timeoutEx.Message);
 
-            throw new TokenCacheException("Failed to track refresh token: " + ex.Message);
         }
         catch (Exception ex) when (ex is RedisConnectionException || ex is SocketException || ex is ObjectDisposedException)
         {
-            _logger.LogError(ex, $"Failed to track refresh token: {refreshToken} of user with id: {userId}. "
+            _logger.LogError(ex, $"Tracking failed for token: {refreshToken}. Caching issue. "
                 + "An redis-related exception occurs while execute operation: " + ex.Message);
+
             throw new TokenCacheException("Failed to track refresh token: " + ex.Message);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Failed to track refresh token: {refreshToken} of user with id: {userId} " +
-            $" due to an unexpected exceptions: {ex.Message}");
+            _logger.LogError(ex, $"Tracking failed for token: {refreshToken}. Caching issue. "
+                + $"Token validation failed due to unexpected exceptions: {ex.Message}");
 
             throw new TokenCacheException("Failed to track refresh token: " + ex.Message);
         }

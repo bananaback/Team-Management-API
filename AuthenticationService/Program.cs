@@ -29,9 +29,9 @@ var services = builder.Services;
 services.AddAutoMapper(typeof(ApplicationUserProfile));
 services.AddSingleton(authenticationConfiguration);
 services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
-services.AddSingleton<AccessTokenGenerator>();
-services.AddSingleton<RefreshTokenGenerator>();
 services.AddSingleton<TokenGenerator>();
+services.AddKeyedSingleton<ITokenGenerator, AccessTokenGenerator>("access");
+services.AddKeyedSingleton<ITokenGenerator, RefreshTokenGenerator>("refresh");
 /*
 services.AddSingleton<IConnectionMultiplexer>(provider =>
 {
@@ -42,8 +42,8 @@ services.AddSingleton<IConnectionMultiplexer>(provider =>
 */
 services.AddSingleton(async x => await RedisConnection.InitializeAsync(builder.Configuration.GetConnectionString("redis")!));
 services.AddScoped<Authenticator>();
-services.AddScoped<RefreshTokenValidator>();
-services.AddScoped<RedisTokenCache>();
+services.AddScoped<ITokenValidator, RefreshTokenValidator>();
+services.AddScoped<ITokenCache, RedisTokenCache>();
 services.AddScoped<IUserService, UserService>();
 services.AddScoped<IUserRepository, UserRepository>();
 services.AddScoped<Authenticator>();
