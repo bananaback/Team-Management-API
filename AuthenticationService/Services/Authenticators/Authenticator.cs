@@ -1,7 +1,7 @@
 using AuthenticationService.Exceptions;
 using AuthenticationService.Models;
 using AuthenticationService.Models.Requests;
-using AuthenticationService.Models.Response;
+using AuthenticationService.Models.Responses;
 using AuthenticationService.Repositories.UserRepositories;
 using AuthenticationService.Services.CacheServices;
 using AuthenticationService.Services.PasswordHashers;
@@ -15,25 +15,25 @@ public class Authenticator
 {
     private readonly IUserRepository _userRepository;
     private readonly IPasswordHasher _passwordHasher;
-    private readonly AccessTokenGenerator _accessTokenGenerator;
-    private readonly RefreshTokenGenerator _refreshTokenGenerator;
-    private readonly RefreshTokenValidator _refreshTokenValidator;
-    private readonly RedisTokenCache _redisTokenCache;
+    private readonly ITokenGenerator _accessTokenGenerator;
+    private readonly ITokenGenerator _refreshTokenGenerator;
+    private readonly ITokenValidator _refreshTokenValidator;
+    private readonly ITokenCache _tokenCache;
     private readonly ILogger<Authenticator> _logger;
 
     public Authenticator(IUserRepository userRepository,
         IPasswordHasher passwordHasher,
-        AccessTokenGenerator accessTokenGenerator,
-        RefreshTokenGenerator refreshTokenGenerator,
-        RedisTokenCache redisTokenCache,
-        RefreshTokenValidator refreshTokenValidator,
+        [FromKeyedServices("access")] ITokenGenerator accessTokenGenerator,
+        [FromKeyedServices("refresh")] ITokenGenerator refreshTokenGenerator,
+        ITokenCache tokenCache,
+        ITokenValidator refreshTokenValidator,
         ILogger<Authenticator> logger)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _accessTokenGenerator = accessTokenGenerator;
         _refreshTokenGenerator = refreshTokenGenerator;
-        _redisTokenCache = redisTokenCache;
+        _tokenCache = tokenCache;
         _refreshTokenValidator = refreshTokenValidator;
         _logger = logger;
     }
@@ -59,7 +59,7 @@ public class Authenticator
                 };
                 try
                 {
-                    _redisTokenCache.TrackUserRefreshToken(user.UserId, authenticatedUserResponse.RefreshToken);
+                    await _tokenCache.TrackUserRefreshToken(user.UserId, authenticatedUserResponse.RefreshToken);
                 }
                 catch (TokenCacheException ex)
                 {
@@ -94,7 +94,7 @@ public class Authenticator
     {
         try
         {
-            await _redisTokenCache.RevokeRefreshToken(refreshToken);
+            await _tokenCache.RevokeRefreshToken(refreshToken);
             _logger.LogInformation($"User logged out success at: {DateTime.Now}. Provided token: {refreshToken}");
 
         }
@@ -116,7 +116,7 @@ public class Authenticator
     {
         try
         {
-            await _redisTokenCache.RevokeAllRefreshTokensOfUser(userId);
+            await _tokenCache.RevokeAllRefreshTokensOfUser(userId);
             _logger.LogInformation($"User with id: {userId} logged out success on all devices at: {DateTime.Now}.");
 
         }
@@ -136,7 +136,7 @@ public class Authenticator
     /// <exception cref="AuthenticationFailedException"></exception>
     public async Task<AuthenticatedUserResponse> RotateToken(string refreshToken)
     {
-        bool refreshTokenRevoked = await _redisTokenCache.IsRefreshTokenRevoked(refreshToken);
+        bool refreshTokenRevoked = await _tokenCache.IsRefreshTokenRevoked(refreshToken);
         if (refreshTokenRevoked)
         {
             _logger.LogError($"Authentication failed: could not rotate the token because it is revoked. Provided token {refreshToken}");
@@ -155,7 +155,7 @@ public class Authenticator
                     AccessToken = _accessTokenGenerator.GenerateToken(user),
                     RefreshToken = _refreshTokenGenerator.GenerateToken(user)
                 };
-                _redisTokenCache.TrackUserRefreshToken(user.UserId, authenticatedUserResponse.RefreshToken);
+                await _tokenCache.TrackUserRefreshToken(user.UserId, authenticatedUserResponse.RefreshToken);
                 return authenticatedUserResponse;
             }
             else
@@ -168,9 +168,9 @@ public class Authenticator
             }
 
         }
-        catch (RequiredTokenClaimNotFoundException ex)
+        catch (TokenExtractionException ex)
         {
-            _logger.LogError(ex, $"Authentication failed: could not rotate the token because required claims not found. Provided token: {refreshToken}");
+            _logger.LogError(ex, $"Authentication failed: could not rotate the token due to token extract failures. Provided token: {refreshToken}");
 
             throw new AuthenticationFailedException(
                 $"Authentication failed: could not rotate the token because required claims not found. Provided token: {refreshToken} {ex.Message}", isUserFault: true);

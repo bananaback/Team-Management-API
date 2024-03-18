@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using AuthenticationService.Exceptions;
 using AuthenticationService.Models.Requests;
-using AuthenticationService.Models.Response;
+using AuthenticationService.Models.Responses;
 using AuthenticationService.Services.Authenticators;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -37,7 +37,7 @@ public class AuthenticationController : Controller
             return BadRequest(new ErrorResponse("Username and password must not be empty"));
         }
 
-        if (Regex.IsMatch(loginRequest.Username, @"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$"))
+        if (!Regex.IsMatch(loginRequest.Password, @"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$"))
         {
             return BadRequest(new ErrorResponse(new List<string>() {
                 "Minimum length of 8 characters",

@@ -1,13 +1,13 @@
 namespace AuthenticationService.Exceptions;
 
-public class RequiredTokenClaimNotFoundException : Exception
+public class TokenExtractionException : Exception
 {
-    public RequiredTokenClaimNotFoundException() : base()
+    public TokenExtractionException() : base()
     {
 
     }
 
-    public RequiredTokenClaimNotFoundException(string message) : base(message)
+    public TokenExtractionException(string message) : base(message)
     {
 
     }

@@ -10,9 +10,9 @@ namespace AuthenticationService.Services.UserServices;
 public class UserService : IUserService
 {
     private readonly IUserRepository _userRepository;
-    private readonly RedisTokenCache _redisTokenCache;
+    private readonly ITokenCache _redisTokenCache;
     private readonly IMapper _mapper;
-    public UserService(IUserRepository userRepository, IMapper mapper, RedisTokenCache redisTokenCache)
+    public UserService(IUserRepository userRepository, IMapper mapper, ITokenCache redisTokenCache)
     {
         _userRepository = userRepository;
         _redisTokenCache = redisTokenCache;

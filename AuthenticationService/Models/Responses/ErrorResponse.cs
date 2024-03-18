@@ -1,4 +1,4 @@
-namespace AuthenticationService.Models.Response;
+namespace AuthenticationService.Models.Responses;
 
 public class ErrorResponse
 {
