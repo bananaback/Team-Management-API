@@ -83,6 +83,7 @@ public class MessageBusClient : IMessageBusClient, IDisposable
             if (!_isConnecting)
             {
                 _isConnecting = true;
+                DisposeChannelAndConnection();
                 _ = Connect();
                 Console.WriteLine("The connection is not available but we are trying to reconnect...");
             }
@@ -116,6 +117,7 @@ public class MessageBusClient : IMessageBusClient, IDisposable
             if (!_isConnecting)
             {
                 _isConnecting = true;
+                DisposeChannelAndConnection();
                 _ = Connect();
                 Console.WriteLine("The connection is not available but we are trying to reconnect...");
             }
