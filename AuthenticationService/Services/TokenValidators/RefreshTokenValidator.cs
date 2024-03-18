@@ -6,7 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace AuthenticationService.Services.TokenValidators;
 
-public class RefreshTokenValidator
+public class RefreshTokenValidator : ITokenValidator
 {
     private readonly AuthenticationConfiguration _authenticationConfiguration;
     public RefreshTokenValidator(AuthenticationConfiguration authenticationConfiguration)
@@ -28,28 +28,33 @@ public class RefreshTokenValidator
             ClockSkew = TimeSpan.Zero,
         };
 
-        var claimsPrincipal = tokenHandler.ValidateToken(refreshToken, validationParameters, out SecurityToken validatedToken);
-
-        var expirationClaim = claimsPrincipal.FindFirst(JwtRegisteredClaimNames.Exp);
-
-        if (expirationClaim is null)
+        try
         {
-            throw new RequiredTokenClaimNotFoundException("Expiration claim not found");
+            var claimsPrincipal = tokenHandler.ValidateToken(refreshToken, validationParameters, out SecurityToken validatedToken);
+            var expirationClaim = claimsPrincipal.FindFirst(JwtRegisteredClaimNames.Exp);
+            if (expirationClaim is null)
+            {
+                throw new TokenExtractionException("Expiration claim not found");
+            }
+
+            var idClaim = claimsPrincipal.FindFirst(c => c.Type == "id");
+
+            if (idClaim is null)
+            {
+                throw new TokenExtractionException("User id claim not found");
+            }
+
+            long expirationTimestamp = long.Parse(expirationClaim.Value);
+            DateTime expirationDateTime = DateTimeOffset.FromUnixTimeSeconds(expirationTimestamp).UtcDateTime;
+
+            // Calculate remaining time until expiration
+            TimeSpan remainingTime = expirationDateTime - DateTime.UtcNow;
+
+            return new RefreshTokenClaims(idClaim.Value, expirationDateTime);
         }
-
-        var idClaim = claimsPrincipal.FindFirst(c => c.Type == "id");
-
-        if (idClaim is null)
+        catch (Exception ex)
         {
-            throw new RequiredTokenClaimNotFoundException("User id claim not found");
+            throw new TokenExtractionException($"Failed to extract token claim: {ex.Message}");
         }
-
-        long expirationTimestamp = long.Parse(expirationClaim.Value);
-        DateTime expirationDateTime = DateTimeOffset.FromUnixTimeSeconds(expirationTimestamp).UtcDateTime;
-
-        // Calculate remaining time until expiration
-        TimeSpan remainingTime = expirationDateTime - DateTime.UtcNow;
-
-        return new RefreshTokenClaims(idClaim.Value, expirationDateTime);
     }
 }

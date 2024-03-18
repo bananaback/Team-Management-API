@@ -3,7 +3,7 @@ using AuthenticationService.Models;
 
 namespace AuthenticationService.Services.TokenGenerators;
 
-public class RefreshTokenGenerator
+public class RefreshTokenGenerator : ITokenGenerator
 {
     private readonly AuthenticationConfiguration _authenticationConfiguration;
     private readonly TokenGenerator _tokenGenerator;
