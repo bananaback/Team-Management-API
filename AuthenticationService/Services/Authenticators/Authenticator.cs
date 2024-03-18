@@ -19,13 +19,15 @@ public class Authenticator
     private readonly RefreshTokenGenerator _refreshTokenGenerator;
     private readonly RefreshTokenValidator _refreshTokenValidator;
     private readonly RedisTokenCache _redisTokenCache;
+    private readonly ILogger<Authenticator> _logger;
 
     public Authenticator(IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         AccessTokenGenerator accessTokenGenerator,
         RefreshTokenGenerator refreshTokenGenerator,
         RedisTokenCache redisTokenCache,
-        RefreshTokenValidator refreshTokenValidator)
+        RefreshTokenValidator refreshTokenValidator,
+        ILogger<Authenticator> logger)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
@@ -33,45 +35,113 @@ public class Authenticator
         _refreshTokenGenerator = refreshTokenGenerator;
         _redisTokenCache = redisTokenCache;
         _refreshTokenValidator = refreshTokenValidator;
+        _logger = logger;
     }
-    public async Task<AuthenticatedUserResponse?> Authenticate(LoginRequest loginRequest)
+
+    /// <summary>
+    /// Authenticate user with username and password
+    /// </summary>
+    /// <param name="loginRequest"></param>
+    /// <returns cref="AuthenticatedUserResponse">Returns AuthenticatedUserResponse includes access token and refresh token.</returns>
+    /// <exception cref="AuthenticationFailedException"></exception>
+    public async Task<AuthenticatedUserResponse> Authenticate(LoginRequest loginRequest)
     {
-        AuthenticatedUserResponse? authenticatedUserResponse = null;
 
         ApplicationUser? user = await _userRepository.GetByUsername(loginRequest.Username);
         if (user is not null)
         {
             if (_passwordHasher.VerifyPassword(loginRequest.Password, user.PasswordHash))
             {
-                authenticatedUserResponse = new AuthenticatedUserResponse()
+                AuthenticatedUserResponse authenticatedUserResponse = new AuthenticatedUserResponse()
                 {
                     AccessToken = _accessTokenGenerator.GenerateToken(user),
                     RefreshToken = _refreshTokenGenerator.GenerateToken(user)
                 };
-                _redisTokenCache.TrackUserRefreshToken(user.UserId, authenticatedUserResponse.RefreshToken);
+                try
+                {
+                    _redisTokenCache.TrackUserRefreshToken(user.UserId, authenticatedUserResponse.RefreshToken);
+                }
+                catch (TokenCacheException ex)
+                {
+                    _logger.LogError(ex, "Authentication failed: could not perform token cache");
+
+                    throw new AuthenticationFailedException("Authentication failed: could not perform token cache.");
+                }
+                _logger.LogInformation($"User with username: {loginRequest.Username} logged in success at: {DateTime.Now}");
+                return authenticatedUserResponse;
+            }
+            else
+            {
+                _logger.LogInformation($"User with username: {loginRequest.Username} logged in failed at: {DateTime.Now} with password: {loginRequest.Password}");
+
+                throw new AuthenticationFailedException("Authentication failed: Wrong password.", isUserFault: true);
             }
         }
+        else
+        {
+            throw new AuthenticationFailedException("Authentication failed: User not found.", isUserFault: true);
+        }
 
-        return authenticatedUserResponse;
     }
 
+    /// <summary>
+    /// Log user out by revoke refresh token
+    /// </summary>
+    /// <param name="refreshToken"></param>
+    /// <returns></returns>
+    /// <exception cref="AuthenticationFailedException"></exception>
     public async Task LogUserOut(string refreshToken)
     {
-        await _redisTokenCache.RevokeRefreshToken(refreshToken);
+        try
+        {
+            await _redisTokenCache.RevokeRefreshToken(refreshToken);
+            _logger.LogInformation($"User logged out success at: {DateTime.Now}. Provided token: {refreshToken}");
+
+        }
+        catch (TokenCacheException ex)
+        {
+            _logger.LogError(ex, "Failed to log user out due to token caching issue.");
+
+            throw new AuthenticationFailedException("Authentication failed: Could not log user out due to caching issue.");
+        }
     }
 
+    /// <summary>
+    /// Log user out on all devices by revoking all living refesh tokens of that user
+    /// </summary>
+    /// <param name="userId"></param>
+    /// <returns></returns>
+    /// <exception cref="AuthenticationFailedException"></exception>
     public async Task LogUserOutOnAllDevices(string userId)
     {
-        await _redisTokenCache.RevokeAllRefreshTokensOfUser(userId);
+        try
+        {
+            await _redisTokenCache.RevokeAllRefreshTokensOfUser(userId);
+            _logger.LogInformation($"User with id: {userId} logged out success on all devices at: {DateTime.Now}.");
+
+        }
+        catch (TokenCacheException ex)
+        {
+            _logger.LogError(ex, "Failed to log all users out due to token caching issue.");
+
+            throw new AuthenticationFailedException("Authentication failed: Could not log all users out due to caching issue.");
+        }
     }
 
-    public async Task<AuthenticatedUserResponse?> RotateToken(string refreshToken)
+    /// <summary>
+    /// Rotate refresh token
+    /// </summary>
+    /// <param name="refreshToken"></param>
+    /// <returns></returns>
+    /// <exception cref="AuthenticationFailedException"></exception>
+    public async Task<AuthenticatedUserResponse> RotateToken(string refreshToken)
     {
-        AuthenticatedUserResponse? authenticatedUserResponse = null;
         bool refreshTokenRevoked = await _redisTokenCache.IsRefreshTokenRevoked(refreshToken);
         if (refreshTokenRevoked)
         {
-            return authenticatedUserResponse;
+            _logger.LogError($"Authentication failed: could not rotate the token because it is revoked. Provided token {refreshToken}");
+
+            throw new AuthenticationFailedException("Authentication failed: could not rotate the token because it is revoked.", isUserFault: true);
         }
         try
         {
@@ -80,23 +150,36 @@ public class Authenticator
             ApplicationUser? user = await _userRepository.GetById(Guid.Parse(refreshTokenClaims.UserId));
             if (user is not null)
             {
-                authenticatedUserResponse = new AuthenticatedUserResponse()
+                AuthenticatedUserResponse authenticatedUserResponse = new AuthenticatedUserResponse()
                 {
                     AccessToken = _accessTokenGenerator.GenerateToken(user),
                     RefreshToken = _refreshTokenGenerator.GenerateToken(user)
                 };
                 _redisTokenCache.TrackUserRefreshToken(user.UserId, authenticatedUserResponse.RefreshToken);
+                return authenticatedUserResponse;
+            }
+            else
+            {
+                _logger.LogError($"Authentication failed: could not rotate the token because user with id: {refreshTokenClaims.UserId} not found.");
+
+                throw new AuthenticationFailedException(
+                    $"Authentication failed: could not rotate the token because user with id: {refreshTokenClaims.UserId} not found.", isUserFault: true);
+
             }
 
         }
         catch (RequiredTokenClaimNotFoundException ex)
         {
-            Console.WriteLine(ex.Message);
+            _logger.LogError(ex, $"Authentication failed: could not rotate the token because required claims not found. Provided token: {refreshToken}");
+
+            throw new AuthenticationFailedException(
+                $"Authentication failed: could not rotate the token because required claims not found. Provided token: {refreshToken} {ex.Message}", isUserFault: true);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Token validation failed: {ex.Message}");
+            _logger.LogError(ex, $"Authentication failed due to an unexpected exception. Provided token: {refreshToken}");
+
+            throw new AuthenticationFailedException($"Authentication failed due to an unexpected exception. Provided token: {refreshToken}");
         }
-        return authenticatedUserResponse;
     }
 }

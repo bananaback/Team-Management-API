@@ -12,4 +12,5 @@ public class AuthenticationDbContext : DbContext, IUnitOfWork
     }
 
     public DbSet<ApplicationUser> Users { get; set; }
+    public DbSet<InboxMessage> InboxMessages { get; set; }
 }

@@ -5,6 +5,7 @@ using AuthenticationService.Profiles;
 using AuthenticationService.Repositories.UserRepositories;
 using AuthenticationService.Services.AsyncDataServices;
 using AuthenticationService.Services.Authenticators;
+using AuthenticationService.Services.CacheService;
 using AuthenticationService.Services.CacheServices;
 using AuthenticationService.Services.EventProcessingServices;
 using AuthenticationService.Services.PasswordHashers;
@@ -31,12 +32,15 @@ services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
 services.AddSingleton<AccessTokenGenerator>();
 services.AddSingleton<RefreshTokenGenerator>();
 services.AddSingleton<TokenGenerator>();
+/*
 services.AddSingleton<IConnectionMultiplexer>(provider =>
 {
     var connectionString = builder.Configuration.GetConnectionString("redis");
     Console.WriteLine("Redis connection string: " + connectionString);
     return ConnectionMultiplexer.Connect(connectionString!);
 });
+*/
+services.AddSingleton(async x => await RedisConnection.InitializeAsync(builder.Configuration.GetConnectionString("redis")!));
 services.AddScoped<Authenticator>();
 services.AddScoped<RefreshTokenValidator>();
 services.AddScoped<RedisTokenCache>();
