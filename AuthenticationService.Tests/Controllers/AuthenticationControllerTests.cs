@@ -13,10 +13,15 @@ using Microsoft.Extensions.Logging;
 using AuthenticationService.Models;
 using System.Security.Claims;
 using AuthenticationService.Exceptions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.VisualStudio.TestPlatform.TestHost;
+using System.Net;
 
 namespace AuthenticationService.Tests.Controllers;
-public class AuthenticationControllerTests
+public class AuthenticationControllerTests : IClassFixture<WebApplicationFactory<Program>>
 {
+    private readonly WebApplicationFactory<Program> _factory;
     private Mock<IUserRepository> _mockUserRepository;
     private Mock<IPasswordHasher> _mockPasswordHasher;
     private Mock<ITokenGenerator> _mockAccessTokenGenerator;
@@ -26,8 +31,10 @@ public class AuthenticationControllerTests
     private Mock<ILogger<Authenticator>> _mockLogger;
     private Mock<Authenticator> _mockAuthenticator;
 
-    public AuthenticationControllerTests()
+    public AuthenticationControllerTests(WebApplicationFactory<Program> factory)
     {
+        _factory = factory;
+
         _mockUserRepository = new Mock<IUserRepository>();
         _mockPasswordHasher = new Mock<IPasswordHasher>();
         _mockAccessTokenGenerator = new Mock<ITokenGenerator>();
@@ -44,6 +51,10 @@ public class AuthenticationControllerTests
                     _mockRefreshTokenValidator.Object,
                     _mockLogger.Object);
     }
+
+
+    // Test Login method
+
     [Fact]
     public async Task Authenticate_ValidCredentials_ReturnsAuthenticatedUserResponse()
     {
@@ -262,5 +273,423 @@ public class AuthenticationControllerTests
         var errorResponse = badRequestResult.Value as ErrorResponse;
         Assert.NotNull(errorResponse);
         Assert.Equal("Could not login due to our server. Please try again.", errorResponse.ErrorMessages.ToList().First());
+    }
+
+    // Test Logout method
+    [Fact]
+    public async Task Logout_RefreshTokenNotFound_ReturnsBadRequest()
+    {
+        // Arrange
+        var mockHttpContext = new Mock<HttpContext>();
+        var mockRequest = new Mock<HttpRequest>();
+        mockHttpContext.Setup(x => x.Request).Returns(mockRequest.Object);
+        mockRequest.Setup(x => x.Cookies["refresh_token"]).Returns((string?)null);
+        var controller = new AuthenticationController(_mockAuthenticator.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = mockHttpContext.Object
+            }
+        };
+
+        // Act
+        var result = await controller.Logout() as BadRequestObjectResult;
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.NotNull(result.Value);
+        Assert.IsType<ErrorResponse>(result.Value);
+        var errorResponse = result.Value as ErrorResponse;
+        Assert.NotNull(errorResponse);
+        Assert.Equal("Refresh token not found.", errorResponse.ErrorMessages.ToList().First());
+    }
+
+    [Fact]
+    public async Task Logout_AuthenticatorLogoutFailed_ReturnsBadRequest()
+    {
+        // Arrange
+        string refreshToken = "refresh_token";
+        var mockHttpContext = new Mock<HttpContext>();
+        var mockRequest = new Mock<HttpRequest>();
+        mockHttpContext.Setup(x => x.Request).Returns(mockRequest.Object);
+        mockRequest.Setup(x => x.Cookies["refreshToken"]).Returns(refreshToken);
+        var authenticationController = new AuthenticationController(_mockAuthenticator.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = mockHttpContext.Object
+            }
+        };
+        _mockTokenCache.Setup(x => x.RevokeRefreshToken(It.IsAny<string>())).ThrowsAsync(new TokenCacheException());
+
+        // Act
+        var result = await authenticationController.Logout();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.IsType<BadRequestObjectResult>(result);
+        var badResult = result as BadRequestObjectResult;
+        Assert.NotNull(badResult);
+        Assert.NotNull(badResult.Value);
+        Assert.IsType<ErrorResponse>(badResult.Value);
+        var errorResponse = badResult.Value as ErrorResponse;
+        Assert.NotNull(errorResponse);
+        Assert.Equal("Could not completely log out. Please try again.", errorResponse.ErrorMessages.First());
+    }
+
+    [Fact]
+    public async Task Logout_LogoutSuccessfully_ReturnsOk()
+    {
+        // Arrange
+        string refreshToken = "refresh_token";
+        var mockHttpContext = new Mock<HttpContext>();
+        var mockRequest = new Mock<HttpRequest>();
+        mockHttpContext.Setup(x => x.Request).Returns(mockRequest.Object);
+        mockRequest.Setup(x => x.Cookies["refreshToken"]).Returns(refreshToken);
+        var authenticationController = new AuthenticationController(_mockAuthenticator.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = mockHttpContext.Object
+            }
+        };
+        _mockTokenCache.Setup(x => x.RevokeRefreshToken(It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await authenticationController.Logout();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.IsType<OkObjectResult>(result);
+        var okResult = result as OkObjectResult;
+        Assert.NotNull(okResult);
+        Assert.Equal("User logout successfully.", okResult.Value);
+    }
+
+    [Fact]
+    public async Task LogoutAllDevices_RefreshTokenMissing_ReturnsBadRequest()
+    {
+        // Arrange
+        var mockHttpContext = new Mock<HttpContext>();
+        var mockRequest = new Mock<HttpRequest>();
+        mockHttpContext.Setup(x => x.Request).Returns(mockRequest.Object);
+        mockRequest.Setup(x => x.Cookies["refreshToken"]).Returns((string?)null);
+        var authenticationController = new AuthenticationController(_mockAuthenticator.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = mockHttpContext.Object
+            }
+        };
+        // Act
+        var result = await authenticationController.LogoutEverywhere();
+        // Assert
+        Assert.NotNull(result);
+        Assert.IsType<BadRequestObjectResult>(result);
+        var badResult = result as BadRequestObjectResult;
+        Assert.NotNull(badResult);
+        Assert.NotNull(badResult.Value);
+        Assert.IsType<ErrorResponse>(badResult.Value);
+        var errorResponse = badResult.Value as ErrorResponse;
+        Assert.NotNull(errorResponse);
+        Assert.Equal("Refresh token not found.", errorResponse.ErrorMessages.First());
+    }
+
+    [Fact]
+    public async Task LogoutAllDevices_UserIdClaimMissing_ReturnsBadRequest()
+    {
+        // Arrange
+        string refreshToken = "refresh_token";
+        var mockHttpContext = new Mock<HttpContext>();
+        var mockRequest = new Mock<HttpRequest>();
+        var mockClaimsPrincipal = new Mock<ClaimsPrincipal>();
+
+        mockRequest.Setup(x => x.Cookies["refreshToken"]).Returns(refreshToken);
+        mockClaimsPrincipal.Setup(p => p.FindFirst("id")).Returns((Claim?)null);
+        mockHttpContext.Setup(x => x.Request).Returns(mockRequest.Object);
+        mockHttpContext.Setup(x => x.User).Returns(mockClaimsPrincipal.Object);
+
+        var authenticationController = new AuthenticationController(_mockAuthenticator.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = mockHttpContext.Object
+            }
+        };
+
+        // Act
+        var result = await authenticationController.LogoutEverywhere();
+
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.IsType<BadRequestObjectResult>(result);
+        var badResult = result as BadRequestObjectResult;
+        Assert.NotNull(badResult);
+        Assert.NotNull(badResult.Value);
+        Assert.IsType<ErrorResponse>(badResult.Value);
+        var errorResponse = badResult.Value as ErrorResponse;
+        Assert.NotNull(errorResponse);
+        Assert.Equal("User ID not found.", errorResponse.ErrorMessages.First());
+    }
+
+    [Fact]
+    public async Task LogoutAllDevices_FailedException_ReturnsBadRequest()
+    {
+        // Arrange
+        string refreshToken = "refresh_token";
+        var mockHttpContext = new Mock<HttpContext>();
+        var mockRequest = new Mock<HttpRequest>();
+        var mockClaimsPrincipal = new Mock<ClaimsPrincipal>();
+
+        mockRequest.Setup(x => x.Cookies["refreshToken"]).Returns(refreshToken);
+        mockClaimsPrincipal.Setup(p => p.FindFirst("id")).Returns(new Claim("id", "bananaback"));
+        mockHttpContext.Setup(x => x.Request).Returns(mockRequest.Object);
+        mockHttpContext.Setup(x => x.User).Returns(mockClaimsPrincipal.Object);
+        _mockTokenCache.Setup(x => x.RevokeAllRefreshTokensOfUser(It.IsAny<string>())).ThrowsAsync(new AuthenticationFailedException());
+
+        var authenticationController = new AuthenticationController(_mockAuthenticator.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = mockHttpContext.Object
+            }
+        };
+
+        // Act
+        var result = await authenticationController.LogoutEverywhere();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.IsType<BadRequestObjectResult>(result);
+        var badResult = result as BadRequestObjectResult;
+        Assert.NotNull(badResult);
+        Assert.NotNull(badResult.Value);
+        Assert.IsType<ErrorResponse>(badResult.Value);
+        var errorResponse = badResult.Value as ErrorResponse;
+        Assert.NotNull(errorResponse);
+        Assert.Equal("Could not completely log out on all devices. Please try again.", errorResponse.ErrorMessages.First());
+    }
+
+    [Fact]
+    public async Task LogoutAllDevices_Success_ReturnsOk()
+    {
+        // Arrange
+        string refreshToken = "refresh_token";
+        var mockHttpContext = new Mock<HttpContext>();
+        var mockRequest = new Mock<HttpRequest>();
+        var mockClaimsPrincipal = new Mock<ClaimsPrincipal>();
+
+        mockRequest.Setup(x => x.Cookies["refreshToken"]).Returns(refreshToken);
+        mockClaimsPrincipal.Setup(p => p.FindFirst("id")).Returns(new Claim("id", "bananaback"));
+        mockHttpContext.Setup(x => x.Request).Returns(mockRequest.Object);
+        mockHttpContext.Setup(x => x.User).Returns(mockClaimsPrincipal.Object);
+        _mockTokenCache.Setup(x => x.RevokeAllRefreshTokensOfUser(It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        var authenticationController = new AuthenticationController(_mockAuthenticator.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = mockHttpContext.Object
+            }
+        };
+
+        // Act
+        var result = await authenticationController.LogoutEverywhere();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.IsType<OkObjectResult>(result);
+        var okResult = result as OkObjectResult;
+        Assert.NotNull(okResult);
+        Assert.Equal("User logout on all devices successfully.", okResult.Value);
+    }
+
+    // Test protected endpoint
+    private Mock<HttpContext> CreateMockHttpContext(bool isAuthorized)
+    {
+        var mockHttpContext = new Mock<HttpContext>();
+        var mockClaimsPrincipal = new Mock<ClaimsPrincipal>();
+
+        if (isAuthorized)
+        {
+            // Set up claims for authorized user (optional)
+            mockClaimsPrincipal.Setup(p => p.FindFirst("id")).Returns(new Claim("id", "mockedUserId"));
+        }
+
+        mockHttpContext.Setup(c => c.User).Returns(mockClaimsPrincipal.Object);
+
+        return mockHttpContext;
+    }
+
+    [Fact]
+    public async Task ProtectedEndPoint_AuthorizeFailed_ReturnsUnauthorized()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var response = await client.GetAsync("http://auth.banana.dev:5049/api/auth/protected");
+
+        // Assert 
+        // unauthorized response (401)
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Refresh_TokenMissing_ReturnsBadRequest()
+    {
+        // Arrange
+        var mockHttpContext = new Mock<HttpContext>();
+        var mockRequest = new Mock<HttpRequest>();
+        mockRequest.Setup(x => x.Cookies["refreshToken"]).Returns((string?)null);
+        mockHttpContext.Setup(x => x.Request).Returns(mockRequest.Object);
+        var authenticationController = new AuthenticationController(_mockAuthenticator.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = mockHttpContext.Object
+            }
+        };
+
+        // Act
+        var result = await authenticationController.Refresh();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.IsType<BadRequestObjectResult>(result);
+        var badResult = result as BadRequestObjectResult;
+        Assert.NotNull(badResult);
+        Assert.NotNull(badResult.Value);
+        Assert.IsType<ErrorResponse>(badResult.Value);
+        var errorResponse = badResult.Value as ErrorResponse;
+        Assert.NotNull(errorResponse);
+        Assert.Equal("Refresh token not found.", errorResponse.ErrorMessages.First());
+
+    }
+
+    [Fact]
+    public async Task Refresh_InvalidToken_ReturnsBadRequest()
+    {
+        // Arrange
+        var refreshToken = "refresh_token";
+        var mockRequest = new Mock<HttpRequest>();
+        var mockHttpContext = new Mock<HttpContext>();
+
+        mockRequest.Setup(x => x.Cookies["refreshToken"]).Returns(refreshToken);
+        mockHttpContext.Setup(x => x.Request).Returns(mockRequest.Object);
+        _mockTokenCache.Setup(x => x.IsRefreshTokenRevoked(It.IsAny<string>())).ReturnsAsync(true);
+
+        var authenticationController = new AuthenticationController(_mockAuthenticator.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = mockHttpContext.Object
+            }
+        };
+
+        // Act
+        var result = await authenticationController.Refresh();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.IsType<BadRequestObjectResult>(result);
+        var badResult = result as BadRequestObjectResult;
+        Assert.NotNull(badResult);
+        Assert.NotNull(badResult.Value);
+        Assert.IsType<ErrorResponse>(badResult.Value);
+        var errorResponse = badResult.Value as ErrorResponse;
+        Assert.NotNull(errorResponse);
+        Assert.Equal("Invalid refresh token.", errorResponse.ErrorMessages.First());
+    }
+
+    [Fact]
+    public async Task Refresh_ServerFault_ReturnsBadRequest()
+    {
+        // Arrange
+        var refreshToken = "refresh_token";
+        var mockRequest = new Mock<HttpRequest>();
+        var mockHttpContext = new Mock<HttpContext>();
+
+        mockRequest.Setup(x => x.Cookies["refreshToken"]).Returns(refreshToken);
+        mockHttpContext.Setup(x => x.Request).Returns(mockRequest.Object);
+        _mockTokenCache.Setup(x => x.IsRefreshTokenRevoked(It.IsAny<string>())).ReturnsAsync(false);
+        _mockRefreshTokenValidator.Setup(x => x.ExtractTokenClaims(It.IsAny<string>())).Throws(new Exception());
+
+        var authenticationController = new AuthenticationController(_mockAuthenticator.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = mockHttpContext.Object
+            }
+        };
+
+        // Act
+        var result = await authenticationController.Refresh();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.IsType<BadRequestObjectResult>(result);
+        var badResult = result as BadRequestObjectResult;
+        Assert.NotNull(badResult);
+        Assert.NotNull(badResult.Value);
+        Assert.IsType<ErrorResponse>(badResult.Value);
+        var errorResponse = badResult.Value as ErrorResponse;
+        Assert.NotNull(errorResponse);
+        Assert.Equal("Could not refresh the token because of server issue. Please try again.", errorResponse.ErrorMessages.First());
+    }
+
+    [Fact]
+    public async Task Refresh_Success_ReturnsOk()
+    {
+        // Arrange
+        var accessToken = "access_token";
+        var refreshToken = "refresh_token";
+        var mockRequest = new Mock<HttpRequest>();
+        var mockHttpContext = new Mock<HttpContext>();
+        ApplicationUser user = new ApplicationUser()
+        {
+            UserId = Guid.NewGuid(),
+            Username = "banana",
+            PasswordHash = "bananahashed",
+            Email = "banana@gmail.com",
+            UserRole = Enums.UserRoleEnum.BASIC_USER
+        };
+
+        mockRequest.Setup(x => x.Cookies["refreshToken"]).Returns(refreshToken);
+        mockHttpContext.Setup(x => x.Request).Returns(mockRequest.Object);
+        _mockTokenCache.Setup(x => x.IsRefreshTokenRevoked(It.IsAny<string>())).ReturnsAsync(false);
+        _mockRefreshTokenValidator.Setup(x => x.ExtractTokenClaims(It.IsAny<string>())).Returns(new RefreshTokenClaims
+        {
+            UserId = user.UserId.ToString()
+        });
+        _mockUserRepository.Setup(x => x.GetById(It.IsAny<Guid>())).ReturnsAsync(user);
+        _mockAccessTokenGenerator.Setup(x => x.GenerateToken(user)).Returns(accessToken);
+        _mockRefreshTokenGenerator.Setup(x => x.GenerateToken(user)).Returns(refreshToken);
+        _mockTokenCache.Setup(x => x.TrackUserRefreshToken(user.UserId, refreshToken)).Returns(Task.CompletedTask);
+
+        var authenticationController = new AuthenticationController(_mockAuthenticator.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = mockHttpContext.Object
+            }
+        };
+
+        // Act
+        var result = await authenticationController.Refresh();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.IsType<OkObjectResult>(result);
+        var okResult = result as OkObjectResult;
+        Assert.NotNull(okResult);
+        Assert.NotNull(okResult.Value);
+        Assert.IsType<AuthenticatedUserResponse>(okResult.Value);
+        var authenticatedUserResponse = okResult.Value as AuthenticatedUserResponse;
+        Assert.NotNull(authenticatedUserResponse);
+        Assert.Equal(accessToken, authenticatedUserResponse.AccessToken);
+        Assert.Equal(refreshToken, authenticatedUserResponse.RefreshToken);
+
     }
 }

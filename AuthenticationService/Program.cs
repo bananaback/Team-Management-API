@@ -12,12 +12,10 @@ using AuthenticationService.Services.PasswordHashers;
 using AuthenticationService.Services.TokenGenerators;
 using AuthenticationService.Services.TokenValidators;
 using AuthenticationService.Services.UserServices;
-using Azure.Core;
 using Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -120,3 +118,5 @@ app.MapControllers();
 PrepDb.PrepPopulation(app, builder.Environment.IsProduction());
 
 app.Run();
+
+public partial class Program { }
