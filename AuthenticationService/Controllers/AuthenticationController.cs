@@ -42,7 +42,7 @@ public class AuthenticationController : Controller
             return BadRequest(new ErrorResponse(new List<string>() {
                 "Minimum length of 8 characters",
                 "At least one lowercase letter",
-                " At least one uppercase letter",
+                "At least one uppercase letter",
                 "At least one digit",
                 "At least one special character"
             }));
@@ -81,7 +81,7 @@ public class AuthenticationController : Controller
         }
         catch (AuthenticationFailedException)
         {
-            return BadRequest("Could not completely log out. Please try again.");
+            return BadRequest(new ErrorResponse("Could not completely log out. Please try again."));
         }
         return Ok("User logout successfully.");
     }
@@ -110,10 +110,9 @@ public class AuthenticationController : Controller
         }
         catch (AuthenticationFailedException)
         {
-            return BadRequest("Could not completely log out on all devices. Please try again.");
+            return BadRequest(new ErrorResponse("Could not completely log out on all devices. Please try again."));
         }
         return Ok("User logout on all devices successfully.");
-
     }
 
     [HttpPost("refresh")]
@@ -133,7 +132,7 @@ public class AuthenticationController : Controller
         {
             if (ex.IsUserFault)
             {
-                return BadRequest(new ErrorResponse("Invalid refresh token"));
+                return BadRequest(new ErrorResponse("Invalid refresh token."));
             }
             else
             {
