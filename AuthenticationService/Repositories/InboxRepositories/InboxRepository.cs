@@ -11,12 +11,18 @@ public class InboxRepository : IInboxRepository
     {
         _dbContext = authenticationDbContext;
     }
-    public IUnitOfWork UnitOfWork => throw new NotImplementedException();
+    public IUnitOfWork UnitOfWork => _dbContext;
 
     public async Task<InboxMessage> CreateMessage(InboxMessage message)
     {
         await _dbContext.InboxMessages.AddAsync(message);
         return message;
+    }
+
+    public async Task DeleteMessage(InboxMessage message)
+    {
+        _dbContext.InboxMessages.Remove(message);
+        await Task.CompletedTask;
     }
 
     public async Task<IEnumerable<InboxMessage>> GetUnProcessedMessages()

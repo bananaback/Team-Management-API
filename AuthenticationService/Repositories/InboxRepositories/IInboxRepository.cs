@@ -8,4 +8,5 @@ public interface IInboxRepository
     Task<IEnumerable<InboxMessage>> GetUnProcessedMessages();
     Task<InboxMessage> CreateMessage(InboxMessage message);
     Task UpdateMessage(InboxMessage message);
+    Task DeleteMessage(InboxMessage message);
 }
